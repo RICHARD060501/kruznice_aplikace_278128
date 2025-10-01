@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <title>Bodová kružnice — aplikace</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .controls { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:15px; align-items:center; }
+    label { font-size:14px; }
+    canvas { border:1px solid #ccc; background:#fff; border-radius:6px; }
+    button { padding:6px 10px; border-radius:6px; cursor:pointer; }
+    #infoModal {
+      display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.5); justify-content:center; align-items:center;
+    }
+    #infoContent {
+      background:#fff; padding:20px; border-radius:8px; max-width:500px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Bodová kružnice — interaktivní aplikace</h2>
+
+  <div class="controls">
+    <label>Střed X: <input id="cx" type="number" value="0" style="width:70px"></label>
+    <label>Střed Y: <input id="cy" type="number" value="0" style="width:70px"></label>
+    <label>Poloměr (m): <input id="radius" type="number" min="1" max="1000" value="5" style="width:90px"></label>
+    <label>Počet bodů: <input id="n" type="number" min="1" max="1000" value="12" style="width:80px"></label>
+    <label>Barva bodů: <input id="color" type="color" value="#ff0000"></label>
+    <button id="drawBtn">Kreslit</button>
+    <button id="pdfBtn">Uložit do PDF</button>
+    <button id="infoBtn">O aplikaci</button>
+  </div>
+
+  <canvas id="c" width="600" height="600"></canvas>
+
+  <div id="infoModal">
+    <div id="infoContent">
+      <h3>O aplikaci</h3>
+      <p>Tato webová aplikace vykresluje body na kružnici dle zadaných parametrů (střed, poloměr, počet bodů, barva).</p>
+      <p><b>Autor:</b> Richard Martinák<br>
+         <b>Kontakt:</b> 278128@vutbr.cz</p>
+      <p><b>Použité technologie:</b> HTML, CSS, JavaScript (Canvas), jsPDF</p>
+      <button onclick="document.getElementById('infoModal').style.display='none'">Zavřít</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    function draw() {
+      const cxVal = Number(document.getElementById('cx').value);
+      const cyVal = Number(document.getElementById('cy').value);
+      const n = Math.max(1, Math.floor(Number(document.getElementById('n').value)));
+      const r = Number(document.getElementById('radius').value);
+      const color = document.getElementById('color').value;
+
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const cx = canvas.width/2;
+      const cy = canvas.height/2;
+      const scale = 40; // px per jednotku
+
+      // Osy X a Y
+      ctx.beginPath();
+      ctx.moveTo(0, cy);
+      ctx.lineTo(canvas.width, cy);
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, canvas.height);
+      ctx.strokeStyle = "#000";
+      ctx.stroke();
+
+      // popisky os (každý metr)
+      ctx.fillStyle = "#000";
+      ctx.font = "12px Arial";
+      for (let i=-10; i<=10; i++) {
+        const x = cx + i*scale;
+        ctx.beginPath();
+        ctx.moveTo(x, cy-5); ctx.lineTo(x, cy+5);
+        ctx.stroke();
+        if (i !== 0) ctx.fillText(i + " m", x-10, cy+15);
+      }
+      for (let j=-10; j<=10; j++) {
+        const y = cy - j*scale;
+        ctx.beginPath();
+        ctx.moveTo(cx-5, y); ctx.lineTo(cx+5, y);
+        ctx.stroke();
+        if (j !== 0) ctx.fillText(j + " m", cx+8, y+4);
+      }
+
+      // body na kružnici
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        const angle = -Math.PI/2 + i * (2*Math.PI/n);
+        const x = cx + (cxVal + r * Math.cos(angle)) * scale;
+        const y = cy - (cyVal + r * Math.sin(angle)) * scale;
+        pts.push({x,y});
+      }
+
+      ctx.fillStyle = color;
+      for (let i=0; i<pts.length; i++) {
+        ctx.beginPath();
+        ctx.arc(pts[i].x, pts[i].y, 4, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // kružnice samotná
+      ctx.beginPath();
+      ctx.arc(cx + cxVal*scale, cy - cyVal*scale, r*scale, 0, Math.PI*2);
+      ctx.strokeStyle = "#666";
+      ctx.setLineDash([5,5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    document.getElementById('drawBtn').addEventListener('click', draw);
+    document.getElementById('infoBtn').addEventListener('click', ()=>{
+      document.getElementById('infoModal').style.display = 'flex';
+    });
+
+    document.getElementById('pdfBtn').addEventListener('click', ()=>{
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+
+      pdf.text("Bodová kružnice - výstup", 20, 20);
+      pdf.text("Parametry:", 20, 30);
+      pdf.text("Střed: (" + document.getElementById('cx').value + ", " + document.getElementById('cy').value + ")", 20, 40);
+      pdf.text("Poloměr: " + document.getElementById('radius').value + " m", 20, 50);
+      pdf.text("Počet bodů: " + document.getElementById('n').value, 20, 60);
+      pdf.text("Barva bodů: " + document.getElementById('color').value, 20, 70);
+      pdf.text("Autor: Richard Martinák, Kontakt: 278128@vutbr.cz", 20, 80);
+
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", 20, 90, 160, 160);
+
+      pdf.save("kruznice.pdf");
+    });
+
+    draw();
+  </script>
+</body>
+</html>
